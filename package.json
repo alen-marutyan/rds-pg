@@ -2,6 +2,16 @@
   "name": "rds",
   "version": "1.0.0",
   "dependencies": {
-    "sequelize": "^6.19.0"
+    "aws-sdk": "^2.1116.0",
+    "pg": "^8.7.3",
+    "pg-hstore": "^2.3.4",
+    "sequelize": "^6.19.0",
+    "serverless-postgres": "^1.10.1",
+    "sqlite3": "^5.0.4",
+    "webpack": "^5.72.0"
+  },
+  "devDependencies": {
+    "sequelize-cli": "^6.4.1",
+    "serverless-webpack": "^5.7.0"
   }
 }

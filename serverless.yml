@@ -4,8 +4,14 @@ service: rds
 frameworkVersion: '3'
 
 custom:
-  youtubeName: 'youtube-table-${sls:stage}'
-  myTableName: my_table
+  webpack:
+    includeModules: false
+
+package:
+  individually: true
+
+plugins:
+  - serverless-webpack
 
 provider:
   name: aws
@@ -18,21 +24,17 @@ provider:
           Action:
             - ssm:GetParameter
           Resource: "*"
-#  environment:
-#    POSTGRESQL_HOST:
-#      Fn::GetAtt: [ MyDB, Endpoint.Address ]
-#    POSTGRESQL_PORT:
-#      Fn::GetAtt: [ MyDB, Endpoint.Port ]
 
-#  custom:
-#    DB_NAME: rds
-#    USERNAME: postgres
-#    PASSWORD: root
-#    POSTGRESQL:
-#      HOST:
-#        Fn::GetAtt: [ MyDB, Endpoint.Address ]
-#      PORT:
-#        Fn::GetAtt: [ MyDB, Endpoint.Port ]
+  environment:
+    youtubeName: 'youtube-table-${sls:stage}'
+    myTableName: my_table
+    DB_NAME: rds
+    USERNAME: postgres
+    PASSWORD: root1234
+    HOST:
+      Fn::GetAtt: [ pgDB, Endpoint.Address ]
+    PORT:
+      Fn::GetAtt: [ pgDB, Endpoint.Port ]
 
 functions:
   mostPopular:
@@ -58,12 +60,12 @@ resources:
     pgDB:
         Type: "AWS::RDS::DBInstance"
         Properties:
-          DBName: "forumexample"
+          DBName: rds
           AllocatedStorage: 5
           DBInstanceClass: "db.m6g.4xlarge"
           Engine: "postgres"
-          MasterUsername: "example"
-          MasterUserPassword: "serverless"
+          MasterUsername: postgres
+          MasterUserPassword: root1234
           VPCSecurityGroups:
             - Fn::GetAtt:
                 - pgSecurityGroup
