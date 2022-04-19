@@ -1,0 +1,77 @@
+org: marutyan21
+app: rds
+service: rds
+frameworkVersion: '3'
+
+custom:
+  youtubeName: 'youtube-table-${sls:stage}'
+  myTableName: my_table
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  region: us-east-1
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+          Resource: "*"
+#  environment:
+#    POSTGRESQL_HOST:
+#      Fn::GetAtt: [ MyDB, Endpoint.Address ]
+#    POSTGRESQL_PORT:
+#      Fn::GetAtt: [ MyDB, Endpoint.Port ]
+
+#  custom:
+#    DB_NAME: rds
+#    USERNAME: postgres
+#    PASSWORD: root
+#    POSTGRESQL:
+#      HOST:
+#        Fn::GetAtt: [ MyDB, Endpoint.Address ]
+#      PORT:
+#        Fn::GetAtt: [ MyDB, Endpoint.Port ]
+
+functions:
+  mostPopular:
+    handler: handler.hello
+    events:
+      - http:
+          path: you
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    pgSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Acess to Postgre
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: '5432'
+            ToPort: '5432'
+            CidrIp: 0.0.0.0/0
+
+    pgDB:
+        Type: "AWS::RDS::DBInstance"
+        Properties:
+          DBName: "forumexample"
+          AllocatedStorage: 5
+          DBInstanceClass: "db.m6g.4xlarge"
+          Engine: "postgres"
+          MasterUsername: "example"
+          MasterUserPassword: "serverless"
+          VPCSecurityGroups:
+            - Fn::GetAtt:
+                - pgSecurityGroup
+                - GroupId
+        DeletionPolicy: "Snapshot"
+
+
+
+
+
+
