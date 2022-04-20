@@ -1,33 +1,45 @@
-const client = require("pg/lib/client");
-// const client = require('serverless-postgres')
-const db = require("./models/index")
-const User = db['user']
+const { Client } = require('pg')
 
+const proxyHealthCheck = async (event, context) => {
+    console.log(JSON.stringify({ event, context }))
 
+    console.log('Creating database client')
+    const client = new Client({
+        database: process.env.DB_NAME,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASS,
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+    })
 
-module.exports.hello = async (event) => {
+    let response
+    try {
+        console.log('Connecting to database')
+        await client.connect()
 
-    var res = await client.Query(`
-    CREATE TABLE IF NOT EXISTS users
-    (
-        id serial not null PRIMARY KEY, 
-        created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        uuid char(36) not null, 
-        name varchar(100) not null
-    );  
-    `)
+        console.log('Quering the database')
+        const { rowCount } = await client.query('SELECT $1::text AS message', ['Hello world!'])
 
-    console.log(res)
+        response = {
+            statusCode: 200,
+            body: JSON.stringify({
+                serverTimestamp: new Date().toISOString(),
+                db: rowCount === 1 ? 'Ok' : 'Fail'
+            })
+        }
+    } catch (error) {
+        console.error(error)
+        response = {
+            statusCode: 500,
+            body: error.message
+        }
+    } finally {
+        console.log('Closing database connection')
+        await client.end()
+    }
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify(
-      {
-        message: "Go Serverless v3.0! Your function executed successfully!",
-        input: event,
-      },
-      null,
-      2
-    ),
-  };
-};
+    console.log(response)
+    return response
+}
+
+module.exports.hello = proxyHealthCheck

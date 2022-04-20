@@ -3,38 +3,53 @@ app: rds
 service: rds
 frameworkVersion: '3'
 
+
 custom:
-  webpack:
-    includeModules: false
+  DB_NAME: dbname
+  DB_USERNAME: dbusername
+  DB_PASSWORD: dbpassword
+  DB_PORT: !GetAtt RDSInstance.Endpoint.Port
+  PROXY_ENDPOINT: !GetAtt RDSProxy.Endpoint
+  PROXY_NAME: example-proxy-name-${opt:stage, 'dev'}
+  VPC_CIDR: 10
 
-package:
-  individually: true
-
-plugins:
-  - serverless-webpack
 
 provider:
   name: aws
   runtime: nodejs14.x
   region: us-east-1
-  iam:
-    role:
-      statements:
-        - Effect: Allow
-          Action:
-            - ssm:GetParameter
-          Resource: "*"
+  vpc:
+    securityGroupIds:
+      - !Ref LambdaSecurityGroup
+    subnetIds:
+      - !Ref SubnetA
+      - !Ref SubnetB
+#  iam:
+#    role:
+#      statements:
+#        - Effect: Allow
+#          Action:
+#            - ssm:GetParameter0
+#            - rds-db:connect
+#          Resource: "*"
 
   environment:
-    youtubeName: 'youtube-table-${sls:stage}'
-    myTableName: my_table
-    DB_NAME: rds
-    USERNAME: postgres
-    PASSWORD: root1234
-    HOST:
-      Fn::GetAtt: [ pgDB, Endpoint.Address ]
-    PORT:
-      Fn::GetAtt: [ pgDB, Endpoint.Port ]
+    NODE_ENV: ${opt:stage, 'dev'}
+    DB_NAME: ${self:custom.DB_NAME}
+    DB_USER: ${self:custom.DB_USERNAME}
+    DB_PASS: ${self:custom.DB_PASSWORD}
+    DB_PORT: ${self:custom.DB_PORT}
+    DB_HOST: ${self:custom.PROXY_ENDPOINT}
+
+#    youtubeName: 'youtube-table-${sls:stage}'
+#    myTableName: my_table
+#    DB_NAME: rds
+#    USERNAME: postgres
+#    PASSWORD: root1234
+#    HOST:
+#      Fn::GetAtt: [ pgDB, Endpoint.Address ]
+#    PORT:
+#      Fn::GetAtt: [ pgDB, Endpoint.Port ]
 
 functions:
   mostPopular:
@@ -45,35 +60,182 @@ functions:
           method: get
           cors: true
 
+
+plugins:
+  - serverless-pseudo-parameters
 resources:
   Resources:
-    pgSecurityGroup:
+    VPC:
+      Type: AWS::EC2::VPC
+      Properties:
+        CidrBlock: ${self:custom.VPC_CIDR}.0.0.0/16
+        EnableDnsSupport: true
+        EnableDnsHostnames: true
+        Tags:
+          - Key: "Name"
+            Value: "VPC"
+
+    SubnetA:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref VPC
+        AvailabilityZone: ${self:provider.region}a
+        CidrBlock: ${self:custom.VPC_CIDR}.0.0.0/24
+        Tags:
+          - Key: "Name"
+            Value: "SubnetA"
+
+    SubnetB:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref VPC
+        AvailabilityZone: ${self:provider.region}b
+        CidrBlock: ${self:custom.VPC_CIDR}.0.1.0/24
+        Tags:
+          - Key: "Name"
+            Value: "SubnetB"
+
+    LambdaSecurityGroup:
       Type: AWS::EC2::SecurityGroup
       Properties:
-        GroupDescription: Acess to Postgre
+        VpcId: !Ref VPC
+        GroupDescription: "Security group for Lambdas"
+        Tags:
+          - Key: "Name"
+            Value: "LambdaSecurityGroup"
+
+    RDSSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: "Security group for RDS"
+        VpcId: !Ref VPC
         SecurityGroupIngress:
           - IpProtocol: tcp
-            FromPort: '5432'
-            ToPort: '5432'
-            CidrIp: 0.0.0.0/0
-
-    pgDB:
-        Type: "AWS::RDS::DBInstance"
-        Properties:
-          DBName: rds
-          AllocatedStorage: 5
-          DBInstanceClass: "db.m6g.4xlarge"
-          Engine: "postgres"
-          MasterUsername: postgres
-          MasterUserPassword: root1234
-          VPCSecurityGroups:
-            - Fn::GetAtt:
-                - pgSecurityGroup
-                - GroupId
-        DeletionPolicy: "Snapshot"
+            FromPort: 0
+            ToPort: 65535
+            CidrIp: "0.0.0.0/0"
+        Tags:
+          - Key: "Name"
+            Value: "RDSSecurityGroup"
 
 
+    RDSInstance:
+      DependsOn: VPCGA
+      Type: AWS::RDS::DBInstance
+      Properties:
+        DBName: ${self:custom.DB_NAME}
+        MasterUsername: ${self:custom.DB_USERNAME}
+        MasterUserPassword: ${self:custom.DB_PASSWORD}
+        Engine: postgres
+        DBInstanceClass: db.m6g.4xlarge
+        AllocatedStorage: "20"
+        PubliclyAccessible: true
+        DBSubnetGroupName: !Ref RDSSubnetGroup
+        VPCSecurityGroups:
+          - !GetAtt RDSSecurityGroup.GroupId
 
+    RDSSubnetGroup:
+      Type: AWS::RDS::DBSubnetGroup
+      Properties:
+        DBSubnetGroupDescription: "RDS subnet group"
+        SubnetIds:
+          - !Ref SubnetA
+          - !Ref SubnetB
+        Tags:
+          - Key: "Name"
+            Value: "RDSSubnetGroup"
 
+    RDSProxy:
+      Type: AWS::RDS::DBProxy
+      Properties:
+        DBProxyName: ${self:custom.PROXY_NAME}
+        EngineFamily: POSTGRESQL
+        RoleArn: !GetAtt RDSProxyRole.Arn
+        Auth:
+          - AuthScheme: SECRETS
+            IAMAuth: DISABLED
+            SecretArn: !Ref RDSSecret
+        VpcSecurityGroupIds:
+          - !Ref RDSSecurityGroup
+        VpcSubnetIds:
+          - !Ref SubnetA
+          - !Ref SubnetB
 
+    RDSProxyTargetGroup:
+      Type: AWS::RDS::DBProxyTargetGroup
+      Properties:
+        TargetGroupName: default
+        DBProxyName: !Ref RDSProxy
+        DBInstanceIdentifiers:
+          - !Ref RDSInstance
 
+    RDSSecret:
+      Type: AWS::SecretsManager::Secret
+      Properties:
+        SecretString: '{"username":"${self:custom.DB_USERNAME}", "password":"${self:custom.DB_PASSWORD}"}'
+
+    RDSProxyRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: "sts:AssumeRole"
+              Principal:
+                Service: "rds.amazonaws.com"
+        Policies:
+          - PolicyName: RDSProxyPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action: "secretsmanager:GetSecretValue"
+                  Resource: !Ref RDSSecret
+                - Effect: Allow
+                  Action: "kms:Decrypt"
+                  Resource: "arn:aws:kms:${self:provider.region}:#{AWS::AccountId}:key/*"
+                  Condition:
+                    StringEquals:
+                      kms:ViaService: "secretsmanager.${self:provider.region}.amazonaws.com"
+
+    InternetGateway:
+      Type: AWS::EC2::InternetGateway
+      Properties:
+        Tags:
+          - Key: "Name"
+            Value: "InternetGateway"
+
+    VPCGA:
+      Type: AWS::EC2::VPCGatewayAttachment
+      Properties:
+        VpcId: !Ref VPC
+        InternetGatewayId: !Ref InternetGateway
+
+    RouteTablePublic:
+      DependsOn: VPCGA
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref VPC
+        Tags:
+          - Key: "Name"
+            Value: "RouteTablePublic"
+
+    RoutePublic:
+      Type: AWS::EC2::Route
+      Properties:
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId: !Ref InternetGateway
+        RouteTableId: !Ref RouteTablePublic
+
+    RouteTableAssociationSubnetA:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId: !Ref RouteTablePublic
+        SubnetId: !Ref SubnetA
+
+    RouteTableAssociationSubnetB:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId: !Ref RouteTablePublic
+        SubnetId: !Ref SubnetB
