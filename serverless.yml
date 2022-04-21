@@ -52,7 +52,7 @@ provider:
 
 functions:
   createUser:
-    handler: src/lambda/user/create.handler
+    handler: dist/lambda/user/create.handler
     events:
       - http:
           path: create
@@ -60,7 +60,7 @@ functions:
           cors: true
 
   editUser:
-    handler: src/lambda/user/edit.handler
+    handler: dist/lambda/user/edit.handler
     events:
       - http:
           path: edit/{id}
@@ -68,7 +68,7 @@ functions:
           cors: true
 
   deleteUser:
-    handler: src/lambda/user/delete.handler
+    handler: dist/lambda/user/delete.handler
     events:
       - http:
           path: delete/{id}
@@ -76,7 +76,7 @@ functions:
           cors: true
 
   findOneUser:
-    handler: src/lambda/user/getOne.handler
+    handler: dist/lambda/user/getOne.handler
     events:
       - http:
           path: get/{id}
@@ -84,7 +84,7 @@ functions:
           cors: true
 
   listUser:
-    handler: src/lambda/user/list.handler
+    handler: dist/lambda/user/list.handler
     events:
       - http:
           path: list
