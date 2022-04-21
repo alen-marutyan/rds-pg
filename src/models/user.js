@@ -1,22 +1,27 @@
-const {sequelize, DataTypes} = require('../util/createDB')
 
+module.exports = (sequelize, DataTypes) =>{
     let User =  sequelize.define('User', {
         id: {
             type: DataTypes.INTEGER,
             primaryKey: true,
             autoIncrement: true
         },
+        email:{
+          type: DataTypes.STRING,
+          allowNull: false,
+          unique: true
+        },
         username: {
             type: DataTypes.STRING,
+            allowNull: false
         },
         password: {
-            type: DataTypes.STRING
+            type: DataTypes.STRING,
+            allowNull: false
         }
     },{
         freezeTableName: true,
     });
 
-sequelize.sync({force: true}).then(r => console.log('r',r)).catch(err=>console.log('err', err.message));
-
-
-module.exports = User
+    return User
+}

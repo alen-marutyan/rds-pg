@@ -8,12 +8,13 @@ const sendResponse = (statusCode, body) => {
 }
 
 
-const validateUser = (email,password) => {
+const validateUser = (email,username,password) => {
     let User = z.object({
-        username: z.string().email(),
+        email: z.string().email(),
+        username: z.string(),
         password: z.string()
     });
-    return User.parse({email, password});
+    return User.parse({email,username, password});
 }
 
 

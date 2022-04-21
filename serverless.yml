@@ -13,7 +13,6 @@ custom:
   PROXY_NAME: example-proxy-name-${opt:stage, 'dev'}
   VPC_CIDR: 10
 
-
 provider:
   name: aws
   runtime: nodejs14.x
@@ -60,182 +59,42 @@ functions:
           method: post
           cors: true
 
+  editUser:
+    handler: src/lambda/user/edit.handler
+    events:
+      - http:
+          path: edit/{id}
+          method: put
+          cors: true
 
+  deleteUser:
+    handler: src/lambda/user/delete.handler
+    events:
+      - http:
+          path: delete/{id}
+          method: delete
+          cors: true
+
+  findOneUser:
+    handler: src/lambda/user/getOne.handler
+    events:
+      - http:
+          path: get/{id}
+          method: get
+          cors: true
+
+  listUser:
+    handler: src/lambda/user/list.handler
+    events:
+      - http:
+          path: list
+          method: get
+          cors: true
 plugins:
   - serverless-pseudo-parameters
+
 resources:
-  Resources:
-    VPC:
-      Type: AWS::EC2::VPC
-      Properties:
-        CidrBlock: ${self:custom.VPC_CIDR}.0.0.0/16
-        EnableDnsSupport: true
-        EnableDnsHostnames: true
-        Tags:
-          - Key: "Name"
-            Value: "VPC"
-
-    SubnetA:
-      Type: AWS::EC2::Subnet
-      Properties:
-        VpcId: !Ref VPC
-        AvailabilityZone: ${self:provider.region}a
-        CidrBlock: ${self:custom.VPC_CIDR}.0.0.0/24
-        Tags:
-          - Key: "Name"
-            Value: "SubnetA"
-
-    SubnetB:
-      Type: AWS::EC2::Subnet
-      Properties:
-        VpcId: !Ref VPC
-        AvailabilityZone: ${self:provider.region}b
-        CidrBlock: ${self:custom.VPC_CIDR}.0.1.0/24
-        Tags:
-          - Key: "Name"
-            Value: "SubnetB"
-
-    LambdaSecurityGroup:
-      Type: AWS::EC2::SecurityGroup
-      Properties:
-        VpcId: !Ref VPC
-        GroupDescription: "Security group for Lambdas"
-        Tags:
-          - Key: "Name"
-            Value: "LambdaSecurityGroup"
-
-    RDSSecurityGroup:
-      Type: AWS::EC2::SecurityGroup
-      Properties:
-        GroupDescription: "Security group for RDS"
-        VpcId: !Ref VPC
-        SecurityGroupIngress:
-          - IpProtocol: tcp
-            FromPort: 0
-            ToPort: 65535
-            CidrIp: "0.0.0.0/0"
-        Tags:
-          - Key: "Name"
-            Value: "RDSSecurityGroup"
-
-
-    RDSInstance:
-      DependsOn: VPCGA
-      Type: AWS::RDS::DBInstance
-      Properties:
-        DBName: ${self:custom.DB_NAME}
-        MasterUsername: ${self:custom.DB_USERNAME}
-        MasterUserPassword: ${self:custom.DB_PASSWORD}
-        Engine: postgres
-        DBInstanceClass: db.m6g.4xlarge
-        AllocatedStorage: "20"
-        PubliclyAccessible: true
-        DBSubnetGroupName: !Ref RDSSubnetGroup
-        VPCSecurityGroups:
-          - !GetAtt RDSSecurityGroup.GroupId
-
-    RDSSubnetGroup:
-      Type: AWS::RDS::DBSubnetGroup
-      Properties:
-        DBSubnetGroupDescription: "RDS subnet group"
-        SubnetIds:
-          - !Ref SubnetA
-          - !Ref SubnetB
-        Tags:
-          - Key: "Name"
-            Value: "RDSSubnetGroup"
-
-    RDSProxy:
-      Type: AWS::RDS::DBProxy
-      Properties:
-        DBProxyName: ${self:custom.PROXY_NAME}
-        EngineFamily: POSTGRESQL
-        RoleArn: !GetAtt RDSProxyRole.Arn
-        Auth:
-          - AuthScheme: SECRETS
-            IAMAuth: DISABLED
-            SecretArn: !Ref RDSSecret
-        VpcSecurityGroupIds:
-          - !Ref RDSSecurityGroup
-        VpcSubnetIds:
-          - !Ref SubnetA
-          - !Ref SubnetB
-
-    RDSProxyTargetGroup:
-      Type: AWS::RDS::DBProxyTargetGroup
-      Properties:
-        TargetGroupName: default
-        DBProxyName: !Ref RDSProxy
-        DBInstanceIdentifiers:
-          - !Ref RDSInstance
-
-    RDSSecret:
-      Type: AWS::SecretsManager::Secret
-      Properties:
-        SecretString: '{"username":"${self:custom.DB_USERNAME}", "password":"${self:custom.DB_PASSWORD}"}'
-
-    RDSProxyRole:
-      Type: AWS::IAM::Role
-      Properties:
-        AssumeRolePolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Effect: Allow
-              Action: "sts:AssumeRole"
-              Principal:
-                Service: "rds.amazonaws.com"
-        Policies:
-          - PolicyName: RDSProxyPolicy
-            PolicyDocument:
-              Version: "2012-10-17"
-              Statement:
-                - Effect: Allow
-                  Action: "secretsmanager:GetSecretValue"
-                  Resource: !Ref RDSSecret
-                - Effect: Allow
-                  Action: "kms:Decrypt"
-                  Resource: "arn:aws:kms:${self:provider.region}:#{AWS::AccountId}:key/*"
-                  Condition:
-                    StringEquals:
-                      kms:ViaService: "secretsmanager.${self:provider.region}.amazonaws.com"
-
-    InternetGateway:
-      Type: AWS::EC2::InternetGateway
-      Properties:
-        Tags:
-          - Key: "Name"
-            Value: "InternetGateway"
-
-    VPCGA:
-      Type: AWS::EC2::VPCGatewayAttachment
-      Properties:
-        VpcId: !Ref VPC
-        InternetGatewayId: !Ref InternetGateway
-
-    RouteTablePublic:
-      DependsOn: VPCGA
-      Type: AWS::EC2::RouteTable
-      Properties:
-        VpcId: !Ref VPC
-        Tags:
-          - Key: "Name"
-            Value: "RouteTablePublic"
-
-    RoutePublic:
-      Type: AWS::EC2::Route
-      Properties:
-        DestinationCidrBlock: 0.0.0.0/0
-        GatewayId: !Ref InternetGateway
-        RouteTableId: !Ref RouteTablePublic
-
-    RouteTableAssociationSubnetA:
-      Type: AWS::EC2::SubnetRouteTableAssociation
-      Properties:
-        RouteTableId: !Ref RouteTablePublic
-        SubnetId: !Ref SubnetA
-
-    RouteTableAssociationSubnetB:
-      Type: AWS::EC2::SubnetRouteTableAssociation
-      Properties:
-        RouteTableId: !Ref RouteTablePublic
-        SubnetId: !Ref SubnetB
+  - ${file(resources/VpcResources.yml)}
+  - ${file(resources/RoutingResources.yml)}
+  - ${file(resources/RdsResources.yml)}
+  - ${file(resources/RdsProxyResources.yml)}
