@@ -1,45 +1,14 @@
-const { Client } = require('pg')
-
-const proxyHealthCheck = async (event, context) => {
-    console.log(JSON.stringify({ event, context }))
-
-    console.log('Creating database client')
-    const client = new Client({
-        database: process.env.DB_NAME,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASS,
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT,
-    })
-
-    let response
-    try {
-        console.log('Connecting to database')
-        await client.connect()
-
-        console.log('Quering the database')
-        const { rowCount } = await client.query('SELECT $1::text AS message', ['Hello world!'])
-
-        response = {
-            statusCode: 200,
-            body: JSON.stringify({
-                serverTimestamp: new Date().toISOString(),
-                db: rowCount === 1 ? 'Ok' : 'Fail'
-            })
-        }
-    } catch (error) {
-        console.error(error)
-        response = {
-            statusCode: 500,
-            body: error.message
-        }
-    } finally {
-        console.log('Closing database connection')
-        await client.end()
-    }
-
-    console.log(response)
-    return response
-}
-
-module.exports.hello = proxyHealthCheck
+// const {User} = require('./models/user');
+//
+//
+// module.exports.hello = async (event) => {
+//
+//         let res = await User.create({ firstName: 'Al', lastName: 'Maryan' });
+//         console.log(res instanceof User); // true
+//         console.log('res', res.firstName);
+//
+//         return {
+//             statusCode: 200,
+//             body: 'Hi'
+//         }
+// }

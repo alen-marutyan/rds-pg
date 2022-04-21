@@ -52,12 +52,12 @@ provider:
 #      Fn::GetAtt: [ pgDB, Endpoint.Port ]
 
 functions:
-  mostPopular:
-    handler: handler.hello
+  createUser:
+    handler: src/lambda/user/create.handler
     events:
       - http:
-          path: you
-          method: get
+          path: create
+          method: post
           cors: true
 
 
