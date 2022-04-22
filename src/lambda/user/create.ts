@@ -2,27 +2,29 @@ import bcrypt from "bcryptjs";
 import sendResponse from "../../util/userSchema";
 import db from "../../models/index";
 const User = db['User']
+import { APIGatewayProxyHandler, APIGatewayProxyResult } from "aws-lambda";
 
-
-export const handler = async (event) => {
+export const handler: APIGatewayProxyHandler = async (event) => {
     const data = JSON.parse(event.body);
     const email: string = data.email
     const username: string = data.username
     const password: string = data.password
-
-
-    const hashPassword = bcrypt.hashSync(password)
+    let response: APIGatewayProxyResult;
+    const hashPassword = bcrypt.hashSync(password);
+    
 
     try {
-        let newVar = await User.create({
+        let infoCreate = await User.create({
             email,
             username,
             password: hashPassword
-        })
+        });
 
-        return sendResponse(200,{data:newVar.dataValues})
+        response = sendResponse(200,{data: JSON.stringify(infoCreate.dataValues)});
     }catch (e) {
-        return sendResponse(e.statusCode, {error: e.message})
+        response = sendResponse(e.statusCode, {error: JSON.stringify(e.message)})
     }
 
+    console.log("response", response);
+    return response;
 }
